@@ -34,16 +34,17 @@ static volatile bool     ready   = false;
 /* ENABLE — ambos flancos */
 static void enable_cb(void)
 {
-    if (!gpioRead(MAGTEK_PIN_ENABLE))  /* flanco negativo: empieza     */
+    if (!gpioRead(MAGTEK_PIN_ENABLE))   /* flanco negativo: empieza */
     {
         bit_idx = 0;
         active  = true;
         ready   = false;
     }
-    else                                /* flanco positivo: termina     */
+    else                                /* flanco positivo: termina */
     {
         active = false;
-        ready  = true;
+        if (bit_idx > 0)        // solo si realmente se leyó algo
+            ready = true;
     }
 }
 
@@ -137,8 +138,8 @@ void magtekInit(void)
     gpioMode(MAGTEK_PIN_CLOCK, INPUT_PULLUP);   /* CLOCK  */
     gpioMode(MAGTEK_PIN_ENABLE, INPUT_PULLUP);   /* ENABLE */
 
-    gpioIRQ(MAGTEK_PIN_CLOCK, NEGEDGE, clock_cb, 6);
-    gpioIRQ(MAGTEK_PIN_ENABLE, BOTH_EDGES,   enable_cb, 6);
+    gpioIRQ(MAGTEK_PIN_CLOCK, GPIO_IRQ_MODE_FALLING_EDGE, clock_cb);
+    gpioIRQ(MAGTEK_PIN_ENABLE, GPIO_IRQ_MODE_BOTH_EDGES,   enable_cb);
 }
 
 bool magtekDataReady(void)
