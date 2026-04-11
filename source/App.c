@@ -11,7 +11,7 @@
 
 
 typedef enum {
-	IDLE, ENTER_ID, VERIFY_ID, ENTER_PASSWORD, VERIFY_PASSWORD,
+	APP_IDLE, ENTER_ID, VERIFY_ID, ENTER_PASSWORD, VERIFY_PASSWORD,
 	ACCESS_GRANTED, ACCESS_DENIED
 } app_states_enum;
 
@@ -42,8 +42,9 @@ void App_Run(void)
 {
 	static int triesCounter = 0;
 	timerUpdate();
+	rotaryEvent = encoderGetState();
 	switch(appState){
-	case IDLE:
+	case APP_IDLE:
 		if(magtekDataReady()){
 			char auxBuffer[MAGTEK_MAX_CHARS+1];
 			char lengthOfData;
@@ -63,86 +64,96 @@ void App_Run(void)
 		}
 		break;
 	case ENTER_ID:
-		
-		tim_id_t encoderTimer = timerGetId();
-		timerStart(encoderTimer, TIMER_MS2TICKS(500), TIM_MODE_PERIODIC, &callbackToggleDisplayIdCursor);
-		
-		bool enteringID = true;
-		char index = 0;
-		char characterBeingChosen = '0';
-		bool modeConfirmInput = false;
+
+		static tim_id_t encoderTimer;
+  		static bool timerStarted = false;
+    	static char index = 0;
+    	static char characterBeingChosen = '0';
+    	static bool modeConfirmInput = false;
 
 
-		while(enteringID){
+		if(!timerStarted){
+			encoderTimer = timerGetId();
+			timerStart(encoderTimer, TIMER_MS2TICKS(500), TIM_MODE_PERIODIC, &callbackToggleDisplayIdCursor);
+			index = 0;
+			characterBeingChosen = '0';
+			modeConfirmInput = false;
+			timerStarted = true;
+		}
 
-			switch(rotaryEvent){
-			case LEFT_TURN:
-			case RIGHT_TURN:
-				if(!modeConfirmInput){
-					characterBeingChosen = rotarySelectChar(characterBeingChosen, rotaryEvent);
-				}
-				else{
-					if(rotaryEvent == LEFT_TURN){
-						modeConfirmInput = false;
-						if(index > 0){
-							id[index] = '\0';
-							index--;
-						}
+
+
+
+
+		switch(rotaryEvent){
+		case LEFT_TURN:
+		case RIGHT_TURN:
+			if(!modeConfirmInput){
+				characterBeingChosen = rotarySelectChar(characterBeingChosen, rotaryEvent);
+			}
+			else{
+				if(rotaryEvent == LEFT_TURN){
+					modeConfirmInput = false;
+					if(index > 0){
+						id[index] = '\0';
+						index--;
 					}
-					else if(rotaryEvent == RIGHT_TURN){
-						modeConfirmInput = false;
-					}
-
 				}
-				break;
-			case BUTTON_PRESS:
-				if(modeConfirmInput){
-					appState = VERIFY_ID;
-					enteringID = false;
-
-					timerStop(encoderTimer);
-					timerDestroy(encoderTimer);
+				else if(rotaryEvent == RIGHT_TURN){
+					modeConfirmInput = false;
 				}
-				else{
+
+			}
+			break;
+		case BUTTON_PRESS:
+			if(modeConfirmInput){
+				appState = VERIFY_ID;
+
+				timerStop(encoderTimer);
+				timerDestroy(encoderTimer);
+				timerStarted = false;
+			}
+			else{
+				if(index < 8){
 					id[index] = characterBeingChosen;
 					index++;
 				}
-				break;
-			case LONG_BUTTON_PRESS:
-				modeConfirmInput = !modeConfirmInput;
-				break;
-			default:
-				break;
 			}
-
-		
-		////////////////// MOSTRAR EN DISPLAY EL ID QUE SE ESTA INGRESANDO
-			if(displayCursorOn){
-				id[index] = characterBeingChosen;
-			}	
-			else{
-				id[index] = '\0';
-			}
-
-
-			if(index >= 4){
-				displayStr((id + index - 4)); // muestro los ultimos 4 caracteres del ID
-			}
-			else{
-				//mostrar en el display el ID que se esta ingresando
-				char displayBuffer[5] = "    ";
-				for(char i = 0; i < index; i++){
-					displayBuffer[4-index+i] = id[i];
-				}
-				displayStr(displayBuffer);
-			}
-
-
+			break;
+		case LONG_BUTTON_PRESS:
+			modeConfirmInput = !modeConfirmInput;
+			break;
+		default:
+			break;
 		}
+
+	////////////////// MOSTRAR EN DISPLAY EL ID QUE SE ESTA INGRESANDO
+		if(displayCursorOn){
+			id[index] = characterBeingChosen;
+		}
+		else{
+			id[index] = '\0';
+		}
+
+
+		if(index >= 4){
+			displayStr((id + index - 4)); // muestro los ultimos 4 caracteres del ID
+		}
+		else{
+			//mostrar en el display el ID que se esta ingresando
+			char displayBuffer[5] = "    ";
+			for(char i = 0; i < index; i++){
+				displayBuffer[4-index+i] = id[i];
+			}
+			displayStr(displayBuffer);
+		}
+
+
+
 
 		break;
 	case VERIFY_ID:
-		
+
 		break;
 	case ENTER_PASSWORD:
 		break;
