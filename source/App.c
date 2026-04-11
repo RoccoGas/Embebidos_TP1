@@ -15,10 +15,15 @@
 
 #define MAX_PASSWORD_LENGTH 5
 
+// Agregar variable global
+static int matchedUserIndex = -1;
+
+
 typedef enum {
 	APP_IDLE, ENTER_ID, VERIFY_ID, ENTER_PASSWORD, VERIFY_PASSWORD,
 	ACCESS_GRANTED, ACCESS_DENIED
 } app_states_enum;
+
 
 
 app_states_enum appState = APP_IDLE;
@@ -31,6 +36,8 @@ static char password[MAX_PASSWORD_LENGTH + 1];
 rotary_event_t rotaryEvent = IDLE;
 
 static bool displayCursorOn = false;
+
+bool volatile accessTimerStarted = false;
 
 typedef struct {
     const char id[9];           
@@ -45,7 +52,6 @@ static const credential_t credentials[] = {
 };
 
 #define MAX_ID_CANT (sizeof(credentials) / sizeof(credentials[0]))
-#define MAX_PASSWORD_CANT (sizeof(credentials) / sizeof(credentials[1]))
 
 char rotarySelectChar(char current, rotary_event_t event);
 void callbackToggleDisplayIdCursor(void);
@@ -58,7 +64,8 @@ void App_Init(void)
 	displayInit();
 	encoderInit();
 	magtekInit();
-
+	gpioMode(PIN_LED_GREEN, OUTPUT);
+	gpioWrite(PIN_LED_GREEN, !LED_ACTIVE);
 }
 void App_Run(void)
 {
@@ -74,13 +81,16 @@ void App_Run(void)
 
 			
 			if(magtekResult == MAGTEK_OK){
-				for(int i = 0; i < lengthOfData && i < MAX_ID_LENGTH; i++){
-
+				// auxBuffer contiene el PAN limpio, ej: "12345678901234567890..."
+				// los primeros 8 son el ID (sin dígito de control = sin el último del PAN)
+				for(int i = 0; i < MAX_ID_LENGTH && i < lengthOfData - 1; i++){
+					id[i] = auxBuffer[i];  // lengthOfData - 1 para excluir el dígito de control
 				}
+				id[MAX_ID_LENGTH] = '\0';
 				appState = VERIFY_ID;
 			}
 			else{
-				//DISPLAY ERROR
+				displayStr("Err ");
 			}
 
 		}
@@ -173,18 +183,20 @@ void App_Run(void)
 			}
 			displayStr(displayBuffer);
 		}
-
-
+		modeConfirmInput? displayLed(2) : displayLed(1);
 		break;
 	case VERIFY_ID:
+		displayLed(0);
 		if(triesCounter >= 3){
 			appState = ACCESS_DENIED;
 		}
 		else{
 			bool idMatch = false;
-			for(int i = 0; i < MAX_ID_CANT ; i++){
+						// En VERIFY_ID, guardar el índice
+			for(int i = 0; i < MAX_ID_CANT; i++){
 				if(strcmp(id, credentials[i].id) == 0){
 					idMatch = true;
+					matchedUserIndex = i;  // <-- guardar
 					break;
 				}
 			}
@@ -192,10 +204,11 @@ void App_Run(void)
 				appState = ENTER_PASSWORD;
 			}
 			else{
-				appState = ENTER_ID;
+				appState = APP_IDLE;
 				triesCounter++;
 			}
 		}
+	
 		break;
 	case ENTER_PASSWORD:
 		static tim_id_t pwEncoderTimer;
@@ -281,19 +294,19 @@ void App_Run(void)
 			displayStr(displayBuffer);
 			displayChar(password[pwIndex], pwIndex >4 ? 3 : pwIndex);
 		}
+		pwModeConfirmInput? displayLed(2) : displayLed(1);
 
 		break;
 	case VERIFY_PASSWORD:
+	displayLed(0);
 	if(triesCounter >= 3){
 			appState = ACCESS_DENIED;
 		}
 		else{
 			bool idMatch = false;
-			for(int i = 0; i < MAX_PASSWORD_CANT ; i++){
-				if(strcmp(password, credentials[i].password) == 0){
-					idMatch = true;
-					break;
-				}
+			// En VERIFY_PASSWORD, usar solo ese índice
+			if(strcmp(password, credentials[matchedUserIndex].password) == 0){
+				idMatch = true;
 			}
 			if(idMatch){
 				appState = ACCESS_GRANTED;
@@ -305,10 +318,31 @@ void App_Run(void)
 		}
 		break;
 	case ACCESS_GRANTED:
-		
+		gpioWrite(PIN_LED_GREEN, LED_ACTIVE);
+		static tim_id_t AccessTimer;
+		accessTimerStarted = true;
+			AccessTimer = timerGetId();
+			timerStart(AccessTimer, TIMER_MS2TICKS(5000), TIM_MODE_SINGLESHOT, &callbackAccessTimer);
+			while (accessTimerStarted)
+			{
+				/* code */
+			}
+			gpioWrite(PIN_LED_GREEN, !LED_ACTIVE);
+			appState = APP_IDLE;
 		break;
 	case ACCESS_DENIED:
-
+		gpioWrite(PIN_LED_RED, LED_ACTIVE);
+		static tim_id_t AccessTimer;
+		accessTimerStarted = true;
+			AccessTimer = timerGetId();
+			timerStart(AccessTimer, TIMER_MS2TICKS(5000), TIM_MODE_SINGLESHOT, &callbackAccessTimer);
+			while (accessTimerStarted)
+			{
+				/* code */
+			}
+			gpioWrite(PIN_LED_RED, !LED_ACTIVE);
+			appState = APP_IDLE;
+		break;	
 		triesCounter = 0;
 		break;
 	}
@@ -334,4 +368,8 @@ char rotarySelectChar(char current, rotary_event_t event)
 
 void callbackToggleDisplayIdCursor(void){
 	displayCursorOn = !displayCursorOn;
+}
+
+void callbackAccessTimer(void){
+	accessTimerStarted = false;
 }
