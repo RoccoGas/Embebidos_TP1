@@ -40,8 +40,8 @@ static bool displayCursorOn = false;
 bool volatile accessTimerStarted = false;
 
 typedef struct {
-    const char id[9];           
-    const char password[6]; 
+    const char id[9];
+    const char password[6];
 } credential_t;
 
 static const credential_t credentials[] = {
@@ -55,6 +55,7 @@ static const credential_t credentials[] = {
 
 char rotarySelectChar(char current, rotary_event_t event);
 void callbackToggleDisplayIdCursor(void);
+void callbackAccessTimer(void);
 
 
 
@@ -66,6 +67,9 @@ void App_Init(void)
 	magtekInit();
 	gpioMode(PIN_LED_GREEN, OUTPUT);
 	gpioWrite(PIN_LED_GREEN, !LED_ACTIVE);
+
+	gpioMode(PIN_LED_RED, OUTPUT);
+	gpioWrite(PIN_LED_RED, !LED_ACTIVE);
 }
 void App_Run(void)
 {
@@ -79,7 +83,7 @@ void App_Run(void)
 			uint8_t lengthOfData;
 			magtek_result_t magtekResult = magtekGetData(auxBuffer, &lengthOfData);
 
-			
+
 			if(magtekResult == MAGTEK_OK){
 				// auxBuffer contiene el PAN limpio, ej: "12345678901234567890..."
 				// los primeros 8 son el ID (sin dígito de control = sin el último del PAN)
@@ -208,7 +212,7 @@ void App_Run(void)
 				triesCounter++;
 			}
 		}
-	
+
 		break;
 	case ENTER_PASSWORD:
 		static tim_id_t pwEncoderTimer;
@@ -319,30 +323,29 @@ void App_Run(void)
 		break;
 	case ACCESS_GRANTED:
 		gpioWrite(PIN_LED_GREEN, LED_ACTIVE);
-		static tim_id_t AccessTimer;
+		static tim_id_t AccessTimerGranted;
 		accessTimerStarted = true;
-			AccessTimer = timerGetId();
-			timerStart(AccessTimer, TIMER_MS2TICKS(5000), TIM_MODE_SINGLESHOT, &callbackAccessTimer);
+			AccessTimerGranted = timerGetId();
+			timerStart(AccessTimerGranted, TIMER_MS2TICKS(5000), TIM_MODE_SINGLESHOT, &callbackAccessTimer);
 			while (accessTimerStarted)
 			{
-				/* code */
+				timerUpdate();
 			}
 			gpioWrite(PIN_LED_GREEN, !LED_ACTIVE);
 			appState = APP_IDLE;
 		break;
 	case ACCESS_DENIED:
 		gpioWrite(PIN_LED_RED, LED_ACTIVE);
-		static tim_id_t AccessTimer;
+		static tim_id_t AccessTimerDenied;
 		accessTimerStarted = true;
-			AccessTimer = timerGetId();
-			timerStart(AccessTimer, TIMER_MS2TICKS(5000), TIM_MODE_SINGLESHOT, &callbackAccessTimer);
+			AccessTimerDenied = timerGetId();
+			timerStart(AccessTimerDenied, TIMER_MS2TICKS(5000), TIM_MODE_SINGLESHOT, &callbackAccessTimer);
 			while (accessTimerStarted)
 			{
-				/* code */
+				timerUpdate();
 			}
 			gpioWrite(PIN_LED_RED, !LED_ACTIVE);
 			appState = APP_IDLE;
-		break;	
 		triesCounter = 0;
 		break;
 	}
