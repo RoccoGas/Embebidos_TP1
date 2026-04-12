@@ -17,14 +17,12 @@
 
 // Agregar variable global
 static int matchedUserIndex = -1;
-
+static uint8_t bright = 16;
 
 typedef enum {
 	APP_IDLE, ENTER_ID, VERIFY_ID, ENTER_PASSWORD, VERIFY_PASSWORD,
 	ACCESS_GRANTED, ACCESS_DENIED
 } app_states_enum;
-
-
 
 app_states_enum appState = APP_IDLE;
 
@@ -140,8 +138,10 @@ void App_Run(void)
 						index--;
 					}
 				}
-				else if(rotaryEvent == RIGHT_TURN){
-					modeConfirmInput = false;
+				else if(rotaryEvent == RIGHT_TURN){		
+					bright %= 16;
+					bright += 4;
+					displayBrightness(bright);
 				}
 
 			}
@@ -189,6 +189,7 @@ void App_Run(void)
 		displayChar(displayCursorOn? characterBeingChosen : '\0', index >= 4 ? 3 : index);
 		modeConfirmInput? displayLed(2) : displayLed(1);
 		break;
+
 	case VERIFY_ID:
 		displayLed(0);
 		if(triesCounter >= 3){
