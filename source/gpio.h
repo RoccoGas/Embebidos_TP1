@@ -1,4 +1,8 @@
-
+/***************************************************************************//**
+  @file     gpio.h
+  @brief    Simple GPIO Pin services, similar to Arduino
+  @author   Nicolás Magliola
+ ******************************************************************************/
 
 #ifndef _GPIO_H_
 #define _GPIO_H_
@@ -41,18 +45,16 @@ enum { PA, PB, PC, PD, PE };
 #define HIGH    1
 #endif // LOW
 
-#ifndef __IRQ_TRIGGER_MODES__
-#define __IRQ_TRIGGER_MODES
-#define DISABLE				0x00
-#define POSEDGE				0x9 // 0b1001
-#define NEGEDGE             0xA // 0b1010
-#define BOTH_EDGES	        0xB // 0b1011
-#define LOW_LEVEL	 		0x8	// 0b1000
-#define HIGH_LEVEL			0xC // 0b1100
 
-#define SWITCH_PRESS NEGEDGE
-#define SWITCH_RELEASE POSEDGE
-#endif // IRQ_TRIGGER_MODES
+// IRQ modes
+enum {
+    GPIO_IRQ_MODE_DISABLE,
+    GPIO_IRQ_MODE_RISING_EDGE,
+    GPIO_IRQ_MODE_FALLING_EDGE,
+    GPIO_IRQ_MODE_BOTH_EDGES,
+
+    GPIO_IRQ_CANT_MODES
+};
 
 
 /*******************************************************************************
@@ -61,7 +63,7 @@ enum { PA, PB, PC, PD, PE };
 
 typedef uint8_t pin_t;
 
-typedef void (*gpio_irq_callback_t)(void);
+typedef void (*pinIrqFun_t)(void);
 
 
 /*******************************************************************************
@@ -76,37 +78,40 @@ typedef void (*gpio_irq_callback_t)(void);
  * @brief Configures the specified pin to behave either as an input or an output
  * @param pin the pin whose mode you wish to set (according PORTNUM2PIN)
  * @param mode INPUT, OUTPUT, INPUT_PULLUP or INPUT_PULLDOWN.
- * @return true if the operation was successful, false otherwise
  */
-bool gpioMode (pin_t pin, uint8_t mode);
+void gpioMode (pin_t pin, uint8_t mode);
+
+/**
+ * @brief Configures how the pin reacts when an IRQ event ocurrs
+ * @param pin the pin whose IRQ mode you wish to set (according PORTNUM2PIN)
+ * @param irqMode disable, risingEdge, fallingEdge or bothEdges
+ * @param irqFun function to call on pin event
+ * @return Registration succeed
+ */
+bool gpioIRQ (pin_t pin, uint8_t irqMode, pinIrqFun_t irqFun);
 
 /**
  * @brief Write a HIGH or a LOW value to a digital pin
  * @param pin the pin to write (according PORTNUM2PIN)
  * @param val Desired value (HIGH or LOW)
- * @return true if the operation was successful, false otherwise
  */
-bool gpioWrite (pin_t pin, bool value);
+void gpioWrite (pin_t pin, bool value);
 
 /**
  * @brief Toggle the value of a digital pin (HIGH<->LOW)
  * @param pin the pin to toggle (according PORTNUM2PIN)
- * @return true if the operation was successful, false otherwise
  */
-bool gpioToggle (pin_t pin);
+void gpioToggle (pin_t pin);
 
 /**
  * @brief Reads the value from a specified digital pin, either HIGH or LOW.
  * @param pin the pin to read (according PORTNUM2PIN)
- * @return HIGH or LOW, LOW on error
+ * @return HIGH or LOW
  */
 bool gpioRead (pin_t pin);
 
-
-bool gpioIRQ(pin_t pin, uint8_t mode, gpio_irq_callback_t fun, uint8_t priority);
 
 /*******************************************************************************
  ******************************************************************************/
 
 #endif // _GPIO_H_
-

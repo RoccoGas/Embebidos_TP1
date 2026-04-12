@@ -1,5 +1,4 @@
 
-
 #include "pisr.h"
 #include "hardware.h"
 #include "MK64F12.h"
@@ -30,12 +29,6 @@ Cuando el contador llega a cero, se recarga automáticamente con el valor almace
 
  Calibration Value Register (SYST_CALIB): Este registro proporciona información sobre la calibración del SysTick.
 */
-
-#define SYSTICK_DEVELOPMENT_MODE    1
-#ifdef SYSTICK_DEVELOPMENT_MODE
-    #include "gpio.h"
-    #define SYSTICK_IRQ_TEST_PIN    PORTNUM2PIN(PE,25)
-#endif
 
 
 #define SYSTICK_PISR_CANT 8
@@ -81,11 +74,6 @@ bool pisrRegisterCallback(pisr_callback_t fun, int period){
 }
 
 __ISR__ SysTick_Handler (void){ //hardware salta aca directamente cuanto se activa el timer, esta en un lugar sabido
-
-	#ifdef SYSTICK_DEVELOPMENT_MODE
-    gpioWrite(SYSTICK_IRQ_TEST_PIN, HIGH);
-	#endif //SYSTICK_DEVELOPMENT_MODE
-
 	int i = 0;
 	for (i = 0 ; i < pisrCounter; i++){
 		if (--(pisr[i].count) <= 0)
@@ -94,12 +82,7 @@ __ISR__ SysTick_Handler (void){ //hardware salta aca directamente cuanto se acti
 		            pisr[i].fun();
 		        }
 	}
-
-	#ifdef SYSTICK_DEVELOPMENT_MODE
-    gpioMode(SYSTICK_IRQ_TEST_PIN, LOW);
-	#endif //SYSTICK_DEVELOPMENT_MODE
 }
-
 
 
 

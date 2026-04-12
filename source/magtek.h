@@ -21,7 +21,7 @@
 /* Pines del lector — modificar según cableado */
 #define MAGTEK_PIN_DATA     PORTNUM2PIN(PD, 0)
 #define MAGTEK_PIN_CLOCK    PORTNUM2PIN(PC, 4)
-#define MAGTEK_PIN_ENABLE   PORTNUM2PIN(PA, 0)
+#define MAGTEK_PIN_ENABLE   PORTNUM2PIN(PC, 12)
 #define MAGTEK_BITS_PER_CHAR 4     /* 4 bits de datos + 1 paridad = 5 bits/char */
 
 /* Caracteres de control Track 2 */

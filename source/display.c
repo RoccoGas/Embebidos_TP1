@@ -14,7 +14,7 @@
 #define	MASC_LED    0x0030
 #define	POS_LED    	4
 
-#define TICKS_DISPLAY TIMER_MS2TICKS(5)
+#define TICKS_DISPLAY TIMER_US2TICKS(2500)
 
 #define POS_U 	0b00
 #define POS_D 	0b10

@@ -45,7 +45,7 @@ typedef struct {
 static const credential_t credentials[] = {
     { "12345678", "12345" },
     { "USER0001", "pass1" },
-    { "USER0002", "abc12" },
+    { "45176601", "abc12" },
     { "ADMIN001", "9999"  },
 };
 
@@ -76,7 +76,8 @@ void App_Run(void)
 	rotaryEvent = encoderGetState();
 	switch(appState){
 	case APP_IDLE:
-		if(magtekDataReady()){
+		bool cardDataReady = magtekDataReady();
+		if(cardDataReady){
 			char auxBuffer[MAGTEK_MAX_CHARS+1];
 			uint8_t lengthOfData;
 			magtek_result_t magtekResult = magtekGetData(auxBuffer, &lengthOfData);
@@ -94,7 +95,6 @@ void App_Run(void)
 			else{
 				displayStr("Err ");
 			}
-
 		}
 
 		if(rotaryEvent == BUTTON_PRESS || rotaryEvent == LONG_BUTTON_PRESS ){
@@ -207,6 +207,7 @@ void App_Run(void)
 			}
 			if(idMatch){
 				appState = ENTER_PASSWORD;
+
 			}
 			else{
 				appState = APP_IDLE;
@@ -214,6 +215,7 @@ void App_Run(void)
 				for(int i = 0; i < MAX_ID_LENGTH + 1; i++){
 					id[i] = '\0';
 				}
+				displayStr("noID");
 			}
 		}
 

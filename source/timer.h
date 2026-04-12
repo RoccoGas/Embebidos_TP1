@@ -19,7 +19,7 @@
  * CONSTANT AND MACRO DEFINITIONS USING #DEFINE
  ******************************************************************************/
 
-#define TIMER_TICK_US           50U    // 50 micro
+#define TIMER_TICK_US           50U    // 100 micro
 #define TIMER_MS2TICKS(ms)      ((ms) * 1000U / TIMER_TICK_US) //para no romper las q ya estaban
 #define TIMER_US2TICKS(us)      ((us) / TIMER_TICK_US)
 

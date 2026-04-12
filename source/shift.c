@@ -7,7 +7,7 @@
 
 //pines de hardware
 
-#define TICKS_DATA	TIMER_US2TICKS(300)
+#define TICKS_DATA	TIMER_US2TICKS(150)
 #define TICKS_CLOCK TICKS_DATA - 2
 #define TICKS_LATCH	TICKS_DATA - 1
 

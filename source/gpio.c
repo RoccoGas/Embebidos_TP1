@@ -1,229 +1,187 @@
+/***************************************************************************//**
+  @file     gpio.c
+  @brief    Simple GPIO Pin services, similar to Arduino
+  @author   Nicolás Magliola
+ ******************************************************************************/
 
-
-
+/*******************************************************************************
+ * INCLUDE HEADER FILES
+ ******************************************************************************/
 
 #include "gpio.h"
 #include "hardware.h"
 
-#define GPIO_PORTS_NUM 5 // uso para la ISR no periodicas buscar q pin causo la interrupcion
-#define PINS_PER_PORT 32
+
+/*******************************************************************************
+ * PRIVATE MACROS AND CONSTANTS
+ ******************************************************************************/
+
+/* Tabla de punteros a registros PORT (PCR/ISFR) */
+static PORT_Type * const port_regs[] = { PORTA, PORTB, PORTC, PORTD, PORTE };
+
+/* Tabla de punteros a registros GPIO (PDDR/PSOR/PCOR/PTOR/PDIR) */
+static GPIO_Type * const gpio_regs[] = { PTA, PTB, PTC, PTD, PTE };
+
+/* Tabla de IRQn para cada puerto */
+static const IRQn_Type port_irqn[] = {
+    PORTA_IRQn, PORTB_IRQn, PORTC_IRQn, PORTD_IRQn, PORTE_IRQn
+};
+
+/* Tabla de callbacks: [puerto][pin] */
+static pinIrqFun_t irq_table[5][32];
+
+/* Pin de testeo para modo development (PTD0 por defecto) */
+#define GPIO_IRQ_TEST_PIN   PORTNUM2PIN(PD, 0)
 
 
+/*******************************************************************************
+ * GLOBAL FUNCTION DEFINITIONS
+ ******************************************************************************/
 
-bool gpioMode (pin_t pin, uint8_t mode){
+void gpioMode (pin_t pin, uint8_t mode)
+{
+    uint8_t port = PIN2PORT(pin);
+    uint8_t num  = PIN2NUM(pin);
 
-    GPIO_Type * gpio;
-    PORT_Type * port;
+    PORT_Type *prt  = port_regs[port];
+    GPIO_Type *gpio = gpio_regs[port];
 
-	switch (PIN2PORT(pin))
-    {
-    case PA:
-        SIM->SCGC5 |= SIM_SCGC5_PORTA_MASK; // Enable clock to PORTA
-                                             // SIM es una macro ((SIM_Type *)SIM_BASE) donde SIM_BASE
-                                             //es la dirección base del módulo SIM (sonde esta el clk del periferico)
-        port = PORTA;
-        gpio = PTA;
-        break;
-    case PB:
-        SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK; // Enable clock to PORTB
-        port = PORTB;
-        gpio = PTB;
-        break;
-    case PC:
-        SIM->SCGC5 |= SIM_SCGC5_PORTC_MASK; // Enable clock to PORTC
-        port = PORTC;
-        gpio = PTC;
-        break;
-    case PD:
-        SIM->SCGC5 |= SIM_SCGC5_PORTD_MASK; // Enable clock to PORTD
-        port = PORTD;
-        gpio = PTD;
-        break;
-    case PE:
-        SIM->SCGC5 |= SIM_SCGC5_PORTE_MASK; // Enable clock to PORTE
-        port = PORTE;
-        gpio = PTE;
-        break;
-    default:
-    	return false;
-        break;
-    }
+    uint32_t pcr = PORT_PCR_MUX(1);
 
-	port->PCR[PIN2NUM(pin)] = (port->PCR[PIN2NUM(pin)] & ~PORT_PCR_MUX_MASK)
-	                         | PORT_PCR_MUX(1); //connecto el mux del puerto al gpio
     switch (mode)
     {
-    case INPUT:
-        gpio->PDDR &= ~(1 << PIN2NUM(pin)); // Configuro el pin como entrada (PDDR = 0)
-        port->PCR[PIN2NUM(pin)] &= ~PORT_PCR_PE_MASK; // Deshabilito las resistencias pull-up/pull-down
-        break;
-    case OUTPUT:
-        gpio->PDDR |= (1 << PIN2NUM(pin)); // Configuro el pin como salida (PDDR = 1)
-        port->PCR[PIN2NUM(pin)] &= ~PORT_PCR_PE_MASK; // Deshabilito las resistencias pull-up/pull-down
-        break;
-    case INPUT_PULLUP:
-    	port->PCR[PIN2NUM(pin)] &= ~(PORT_PCR_PE_MASK | PORT_PCR_PS_MASK); //limpio esos
-        gpio->PDDR &= ~(1 << PIN2NUM(pin)); // Configuro el pin como entrada (PDDR = 0)
-        port->PCR[PIN2NUM(pin)] |= PORT_PCR_PE_MASK; // Habilito las resistencias pull-up/pull-down
-        port->PCR[PIN2NUM(pin)] |= PORT_PCR_PS_MASK; // Configuro la resistencia como pull-up (PS = 1)
-        break;
-    case INPUT_PULLDOWN:
-    	port->PCR[PIN2NUM(pin)] &= ~(PORT_PCR_PE_MASK | PORT_PCR_PS_MASK); //limpio esos
-        gpio->PDDR &= ~(1 << PIN2NUM(pin)); // Configuro el pin como entrada (PDDR = 0)
-        port->PCR[PIN2NUM(pin)] |= PORT_PCR_PE_MASK; // Habilito las resistencias pull-up/pull-down
-        port->PCR[PIN2NUM(pin)] &= ~PORT_PCR_PS_MASK; // Configuro la resistencia como pull-down (PS = 0)
-         break;
-    default:
-    	return false;
-        break;
+        case INPUT_PULLUP:
+            pcr |= PORT_PCR_PE_MASK | PORT_PCR_PS_MASK;
+            break;
+        case INPUT_PULLDOWN:
+            pcr |= PORT_PCR_PE_MASK;
+            break;
+        case INPUT:
+        case OUTPUT:
+        default:
+            break;
     }
-    return true;
-}
 
-bool gpioRead (pin_t pin){
-    GPIO_Type * gpio;
+    prt->PCR[num] = pcr;
 
-    switch (PIN2PORT(pin))
-    {
-    case PA: gpio = PTA; break;
-    case PB: gpio = PTB; break;
-    case PC: gpio = PTC; break;
-    case PD: gpio = PTD; break;
-    case PE: gpio = PTE; break;
-    default: return false;
-    }
-    if (gpio->PDIR & (1 << PIN2NUM(pin))) // Si el bit correspondiente al pin es 1
-        return HIGH;
+    if (mode == OUTPUT)
+        gpio->PDDR |=  (1UL << num);
     else
-        return LOW;
+        gpio->PDDR &= ~(1UL << num);
 
+#ifdef GPIO_DEVELOPMENT_MODE
+    /* En modo development, configurar el TP como salida la primera vez */
+    static bool tp_init = false;
+    if (!tp_init)
+    {
+        tp_init = true;
+        uint8_t tp_port = PIN2PORT(GPIO_IRQ_TEST_PIN);
+        uint8_t tp_num  = PIN2NUM(GPIO_IRQ_TEST_PIN);
+        port_regs[tp_port]->PCR[tp_num] = PORT_PCR_MUX(1);
+        gpio_regs[tp_port]->PDDR |= (1UL << tp_num);
+        gpio_regs[tp_port]->PCOR  = (1UL << tp_num);  /* TP en bajo */
+    }
+#endif // GPIO_DEVELOPMENT_MODE
 }
 
 
-bool gpioWrite (pin_t pin, bool value){
-	GPIO_Type * gpio;
+bool gpioIRQ (pin_t pin, uint8_t irqMode, pinIrqFun_t irqFun)
+{
+    uint8_t port = PIN2PORT(pin);
+    uint8_t num  = PIN2NUM(pin);
 
-    switch (PIN2PORT(pin))
+    if (port >= 5 || num >= 32)
+        return false;
+    if (irqMode >= GPIO_IRQ_CANT_MODES)
+        return false;
+
+    /* Mapear modo a campo IRQC */
+    static const uint8_t irqc_map[] = {
+        0x0,    /* GPIO_IRQ_MODE_DISABLE      */
+        0x9,    /* GPIO_IRQ_MODE_RISING_EDGE  */
+        0xA,    /* GPIO_IRQ_MODE_FALLING_EDGE */
+        0xB,    /* GPIO_IRQ_MODE_BOTH_EDGES   */
+    };
+
+    /* Read-modify-write: preservar PCR, actualizar IRQC y limpiar flag previo */
+    port_regs[port]->PCR[num] =
+        (port_regs[port]->PCR[num] & ~PORT_PCR_IRQC_MASK)
+        | PORT_PCR_IRQC(irqc_map[irqMode])
+        | PORT_PCR_ISF_MASK;    /* limpiar flag espurio antes de habilitar */
+
+    /* Guardar callback */
+    irq_table[port][num] = irqFun;
+
+    /* Habilitar o deshabilitar la IRQ del puerto en la NVIC */
+    if (irqMode == GPIO_IRQ_MODE_DISABLE)
+        NVIC_DisableIRQ(port_irqn[port]);
+    else
     {
-    case PA: gpio = PTA; break;
-    case PB: gpio = PTB; break;
-    case PC: gpio = PTC; break;
-    case PD: gpio = PTD; break;
-    case PE: gpio = PTE; break;
-    default: return false;
-    	break;
+        NVIC_ClearPendingIRQ(port_irqn[port]);
+        NVIC_EnableIRQ(port_irqn[port]);
     }
+
+    return true;
+}
+
+
+void gpioWrite (pin_t pin, bool value)
+{
+    uint8_t port = PIN2PORT(pin);
+    uint8_t num  = PIN2NUM(pin);
+
     if (value)
-            gpio->PSOR = (1 << PIN2NUM(pin));
-        else
-            gpio->PCOR = (1 << PIN2NUM(pin));
-
-    return true;
+        gpio_regs[port]->PSOR = (1UL << num);
+    else
+        gpio_regs[port]->PCOR = (1UL << num);
 }
 
-bool gpioToggle (pin_t pin){
-    GPIO_Type * gpio;
 
-    switch (PIN2PORT(pin))
+void gpioToggle (pin_t pin)
+{
+    gpio_regs[PIN2PORT(pin)]->PTOR = (1UL << PIN2NUM(pin));
+}
+
+
+bool gpioRead (pin_t pin)
+{
+    return (bool)((gpio_regs[PIN2PORT(pin)]->PDIR >> PIN2NUM(pin)) & 1UL);
+}
+
+
+/*******************************************************************************
+ * PRIVATE: ISR genérica para un puerto
+ ******************************************************************************/
+
+static void port_irq_handler(uint8_t port)
+{
+#ifdef GPIO_DEVELOPMENT_MODE
+    gpioWrite(GPIO_IRQ_TEST_PIN, HIGH);
+#endif // GPIO_DEVELOPMENT_MODE
+
+    PORT_Type *prt = port_regs[port];
+
+    uint32_t isfr = prt->ISFR;  /* leer todos los flags de una sola vez */
+    prt->ISFR = isfr;            /* limpiar (write-1-to-clear, registro completo) */
+
+    for (uint8_t pin = 0; pin < 32; pin++)
     {
-    case PA: gpio = PTA; break;
-    case PB: gpio = PTB; break;
-    case PC: gpio = PTC; break;
-    case PD: gpio = PTD; break;
-    case PE: gpio = PTE; break;
-    default: return false;
+        if ((isfr & (1UL << pin)) && irq_table[port][pin])
+            irq_table[port][pin]();
     }
 
-    gpio->PTOR = (1 << PIN2NUM(pin));
-    return true;
+#ifdef GPIO_DEVELOPMENT_MODE
+    gpioWrite(GPIO_IRQ_TEST_PIN, LOW);
+#endif // GPIO_DEVELOPMENT_MODE
 }
 
 
+/*******************************************************************************
+ * IRQ HANDLERS — uno por puerto
+ ******************************************************************************/
 
-//////////SECCION INTERRUPCIONES (por hardware)/////////////
-
-static gpio_irq_callback_t callbackTable[GPIO_PORTS_NUM][PINS_PER_PORT]; //aca guardo ell callback correspondiente al port x pin y
-
-
-
-static void gpio_irq_dispatch(uint8_t portLetter){ //funcion llamada por __ISR__ PORTx_IRQHandler(void) { gpio_irq_dispatch(Px); }
-
-	PORT_Type * port;
-
-	switch (portLetter)
-	{
-	case PA: port = PORTA;  break;
-	case PB: port = PORTB;  break;
-	case PC: port = PORTC;  break;
-	case PD: port = PORTD;  break;
-	case PE: port = PORTE;  break;
-	default:
-		break;
-	}
-	for(uint8_t i = 0; i < PINS_PER_PORT; i++ ){
-		if(port->PCR[i] & PORT_PCR_ISF_MASK){
-			port->PCR[i]|= PORT_PCR_ISF_MASK; // bajo la flag de interrupcion
-
-			if(callbackTable[portLetter][i] != 0){ //si tiene funcion cargada
-						callbackTable[portLetter][i]();
-					}
-		}
-
-	}
-}
-
-bool gpioIRQ(pin_t pin, uint8_t mode, gpio_irq_callback_t fun, uint8_t priority){
-
-	PORT_Type * port;
-	IRQn_Type irqn;
-
-	switch (PIN2PORT(pin))
-	    {
-	    case PA: port = PORTA; irqn = PORTA_IRQn; break;
-	    case PB: port = PORTB; irqn = PORTB_IRQn; break;
-	    case PC: port = PORTC; irqn = PORTC_IRQn; break;
-	    case PD: port = PORTD; irqn = PORTD_IRQn; break;
-	    case PE: port = PORTE; irqn = PORTE_IRQn; break;
-	    default: return false;
-	    }
-
-	if ((PIN2PORT(pin) >= GPIO_PORTS_NUM) || (PIN2NUM(pin) >= PINS_PER_PORT) || (priority > 15)) //valido
-	        return false;
-
-	if((mode != DISABLE) && (fun == 0)) //solo podes pasar null si es modo disable
-		return false;
-
-	if (mode == DISABLE){
-		callbackTable[PIN2PORT(pin)][PIN2NUM(pin)] = 0; //limpio la tabla de callback de pin mandado
-		port->PCR[PIN2NUM(pin)] &= ~PORT_PCR_IRQC_MASK; //apago interrupciones
-
-		bool anyActive = false;
-		for(uint8_t i = 0; i < PINS_PER_PORT; i++){
-			if(callbackTable[PIN2PORT(pin)][i] != 0){
-				anyActive = true;
-				break;
-			}
-		}
-		if(!anyActive){ // si ninguna del puerto esta activa apago desconecto el puerto desde el nvic
-			NVIC_DisableIRQ(irqn);
-		}
-
-		return true;
-
-	}
-	port->PCR[PIN2NUM(pin)] = (port->PCR[PIN2NUM(pin)] & ~PORT_PCR_IRQC_MASK) //habilito interrupciones
-								| PORT_PCR_IRQC(mode); // recordar q mode se ingresa con una macro que tiene ya los bits para ese modo
-
-	callbackTable[PIN2PORT(pin)][PIN2NUM(pin)] = fun; // guardo la funcion en la tabla;
-
-	NVIC_SetPriority(irqn, priority);
-	NVIC_EnableIRQ(irqn);
-
-	return true;
-}
-
-__ISR__ PORTA_IRQHandler(void) { gpio_irq_dispatch(PA); }
-__ISR__ PORTB_IRQHandler(void) { gpio_irq_dispatch(PB); }
-__ISR__ PORTC_IRQHandler(void) { gpio_irq_dispatch(PC); }
-__ISR__ PORTD_IRQHandler(void) { gpio_irq_dispatch(PD); }
-__ISR__ PORTE_IRQHandler(void) { gpio_irq_dispatch(PE); }
+__ISR__ PORTA_IRQHandler (void) { port_irq_handler(PA); }
+__ISR__ PORTB_IRQHandler (void) { port_irq_handler(PB); }
+__ISR__ PORTC_IRQHandler (void) { port_irq_handler(PC); }
+__ISR__ PORTD_IRQHandler (void) { port_irq_handler(PD); }
+__ISR__ PORTE_IRQHandler (void) { port_irq_handler(PE); }
