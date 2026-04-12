@@ -74,6 +74,9 @@ void App_Run(void)
 	static int triesCounter = 0;
 	timerUpdate();
 	rotaryEvent = encoderGetState();
+
+
+	
 	switch(appState){
 	case APP_IDLE:
 		bool cardDataReady = magtekDataReady();
@@ -91,9 +94,8 @@ void App_Run(void)
 				}
 				id[MAX_ID_LENGTH] = '\0';
 				appState = VERIFY_ID;
-			}
-			else{
-				displayStr("Err ");
+
+				magtekDisableIRQ();
 			}
 		}
 
@@ -103,7 +105,7 @@ void App_Run(void)
 		break;
 	case ENTER_ID:
 
-
+	
 		static tim_id_t encoderTimer;
   		static bool timerStarted = false;
     	static char index = 0;
@@ -112,12 +114,19 @@ void App_Run(void)
 
 
 		if(!timerStarted){
+			magtekDisableIRQ();
 			encoderTimer = timerGetId();
 			timerStart(encoderTimer, TIMER_MS2TICKS(500), TIM_MODE_PERIODIC, &callbackToggleDisplayIdCursor);
 			index = 0;
 			characterBeingChosen = '0';
 			modeConfirmInput = false;
 			timerStarted = true;
+
+			for(int i = 0; i < MAX_ID_LENGTH + 1; i++){
+				id[i] = 0;
+			}
+
+			
 		}
 
 
@@ -153,6 +162,7 @@ void App_Run(void)
 				timerStop(encoderTimer);
 				timerDestroy(encoderTimer);
 				timerStarted = false;
+
 			}
 			else{
 				if(index < 8){
@@ -216,6 +226,7 @@ void App_Run(void)
 					id[i] = '\0';
 				}
 				displayStr("noID");
+				magtekEnableIRQ();
 			}
 		}
 
@@ -235,6 +246,10 @@ void App_Run(void)
 			pwCharacterBeingChosen = '0';
 			pwModeConfirmInput = false;
 			pwTimerStarted = true;
+
+			for(int i = 0; i < MAX_PASSWORD_LENGTH + 1; i++){
+				password[i] = 0;
+			}
 		}
 
 
@@ -268,6 +283,7 @@ void App_Run(void)
 				timerStop(pwEncoderTimer);
 				timerDestroy(pwEncoderTimer);
 				pwTimerStarted = false;
+
 			}
 			else{
 				if(pwIndex < 5){
@@ -369,12 +385,6 @@ char rotarySelectChar(char current, rotary_event_t event)
 void callbackToggleDisplayIdCursor(void){
 	displayCursorOn = !displayCursorOn;
 }
-
-void callbackAccessTimer(void){
-	accessTimerStarted = false;
-}
-
-
 
 void callbackAccessTimer(void){
 	accessTimerStarted = false;

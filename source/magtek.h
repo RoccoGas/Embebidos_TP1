@@ -41,7 +41,15 @@ typedef enum {
 
 /*******************************************************************************
  * FUNCIONES
- ******************************************************************************/
+ ******************************************************************************//**
+ * @brief Habilita las IRQs de CLOCK y ENABLE (estado inicial tras magtekInit).
+ */
+void magtekEnableIRQ(void);
+
+/**
+ * @brief Deshabilita las IRQs de CLOCK y ENABLE sin perder la config.
+ */
+void magtekDisableIRQ(void);
 
 /**
  * @brief Inicializa el driver (GPIOs e IRQs).

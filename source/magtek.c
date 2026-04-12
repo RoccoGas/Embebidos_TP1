@@ -164,6 +164,18 @@ static magtek_result_t decode(uint8_t *buf, uint8_t *len)
 /*******************************************************************************
  * API PÚBLICA
  ******************************************************************************/
+void magtekEnableIRQ(void)
+{
+    gpioIRQ(MAGTEK_PIN_CLOCK,  GPIO_IRQ_MODE_FALLING_EDGE, clock_cb);
+    gpioIRQ(MAGTEK_PIN_ENABLE, GPIO_IRQ_MODE_BOTH_EDGES,   enable_cb);
+}
+
+void magtekDisableIRQ(void)
+{
+    gpioIRQ(MAGTEK_PIN_CLOCK,  GPIO_IRQ_MODE_DISABLE, 0);
+    gpioIRQ(MAGTEK_PIN_ENABLE, GPIO_IRQ_MODE_DISABLE, 0);
+}
+
 
 void magtekInit(void)
 {
@@ -171,12 +183,11 @@ void magtekInit(void)
     active  = false;
     ready   = false;
 
-    gpioMode(MAGTEK_PIN_DATA,   INPUT_PULLUP);
-    gpioMode(MAGTEK_PIN_CLOCK,  INPUT_PULLUP);
-    gpioMode(MAGTEK_PIN_ENABLE, INPUT_PULLUP);
+    gpioMode(MAGTEK_PIN_DATA,   INPUT);
+    gpioMode(MAGTEK_PIN_CLOCK,  INPUT);
+    gpioMode(MAGTEK_PIN_ENABLE, INPUT);
 
-    gpioIRQ(MAGTEK_PIN_CLOCK,  GPIO_IRQ_MODE_FALLING_EDGE, clock_cb);
-    gpioIRQ(MAGTEK_PIN_ENABLE, GPIO_IRQ_MODE_BOTH_EDGES,   enable_cb);
+    magtekEnableIRQ();
 }
 
 bool magtekDataReady(void)
