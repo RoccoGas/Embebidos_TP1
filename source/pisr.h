@@ -20,7 +20,7 @@
 //DRIVER DE SYSTICK. LA APP DEBERIA USAR EL  "TIMER"
 
 
-#define SYSTICK_ISR_FREQUENCY_HZ 10000U // 100us
+#define SYSTICK_ISR_FREQUENCY_HZ 20000U // 50us
 
 
 /*******************************************************************************
