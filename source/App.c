@@ -68,6 +68,9 @@ void App_Init(void)
 
 	gpioMode(PIN_LED_RED, OUTPUT);
 	gpioWrite(PIN_LED_RED, !LED_ACTIVE);
+
+	gpioMode(PIN_LED_BLUE, OUTPUT);
+	gpioWrite(PIN_LED_BLUE, !LED_ACTIVE);
 }
 void App_Run(void)
 {
@@ -79,6 +82,7 @@ void App_Run(void)
 	
 	switch(appState){
 	case APP_IDLE:
+		gpioWrite(PIN_LED_BLUE, LED_ACTIVE);
 		bool cardDataReady = magtekDataReady();
 		if(cardDataReady){
 			char auxBuffer[MAGTEK_MAX_CHARS+1];
@@ -95,7 +99,7 @@ void App_Run(void)
 				id[MAX_ID_LENGTH] = '\0';
 				appState = VERIFY_ID;
 
-				magtekDisableIRQ();
+	
 			}
 		}
 
@@ -104,7 +108,7 @@ void App_Run(void)
 		}
 		break;
 	case ENTER_ID:
-
+		gpioWrite(PIN_LED_BLUE, !LED_ACTIVE);
 	
 		static tim_id_t encoderTimer;
   		static bool timerStarted = false;
@@ -114,7 +118,6 @@ void App_Run(void)
 
 
 		if(!timerStarted){
-			magtekDisableIRQ();
 			encoderTimer = timerGetId();
 			timerStart(encoderTimer, TIMER_MS2TICKS(500), TIM_MODE_PERIODIC, &callbackToggleDisplayIdCursor);
 			index = 0;
@@ -201,6 +204,9 @@ void App_Run(void)
 		break;
 
 	case VERIFY_ID:
+		gpioWrite(PIN_LED_BLUE, !LED_ACTIVE);
+
+
 		displayLed(0);
 		if(triesCounter >= 3){
 			appState = ACCESS_DENIED;
@@ -222,11 +228,8 @@ void App_Run(void)
 			else{
 				appState = APP_IDLE;
 				triesCounter++;
-				for(int i = 0; i < MAX_ID_LENGTH + 1; i++){
-					id[i] = '\0';
-				}
 				displayStr("noID");
-				magtekEnableIRQ();
+				magtekInit();
 			}
 		}
 
