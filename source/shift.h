@@ -50,10 +50,12 @@ void shiftSend (void);
  */
 bool shiftIsReady(void);
 
-
-// void shiftOutputEnable (bool ena);
+/**
+ * @brief sets brightness for display
+ * @param brightness level of brightness 1min 16max
+ */
+void shiftOutputEnable (uint8_t brightness);
 
 
 
 #endif
-

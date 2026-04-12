@@ -32,4 +32,10 @@ void displayStr(char str [4]);
 
 void displayLed(uint8_t num);
 
+/**
+ * @brief sets brightness for display
+ * @param brightness level of brightness 1min 16max
+ */
+void displayBrightness(uint8_t brightness);
+
 #endif

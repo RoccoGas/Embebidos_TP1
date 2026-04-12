@@ -84,6 +84,10 @@ void displayLed(uint8_t led)
 
 }
 
+void displayBrightness(uint8_t brightness){
+	shiftOutputEnable(brightness);
+}
+
 void displayUpdate(void)
 {
 	mul = mul % 4;

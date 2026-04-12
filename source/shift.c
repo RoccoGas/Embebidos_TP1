@@ -19,6 +19,8 @@ static uint16_t buffer = 0;
 static uint8_t counter = 0;
 static bool ready = 1; //ready = 1 preparado para recibir denuevo
 
+static uint8_t bright = 10; 
+
 // static bool enable = 0; en caso de despues querer utilizar brillo
 
 static tim_id_t shift_id;
@@ -82,11 +84,16 @@ void shiftCallbackData(){
 	gpioWrite(PIN_CLOCK, 0);
 	timerStart(clock_id, TICKS_CLOCK, TIM_MODE_SINGLESHOT, shiftClock);
 
+	if(counter == bright){
+		gpioWrite (PIN_OUTPUT_ENABLE, 1);
+	}
+
 	if (counter == SHIFTREGISTER_SIZE - 1){
 
 		timerStop(shift_id);
 
 		gpioWrite (PIN_LATCH, 0);
+		gpioWrite (PIN_OUTPUT_ENABLE, 0);
 		timerStart(latch_id, TICKS_LATCH, TIM_MODE_SINGLESHOT, shiftLatch);
 
 		return;
@@ -95,6 +102,15 @@ void shiftCallbackData(){
 	counter += 1;
 }
 
+bool shiftIsReady(void){
+	return ready;
+}
+
+void shiftOutputEnable (uint8_t brightness){
+	bright = brightness;
+}
+
+//callbacks
 void shiftClock(void){
 	gpioWrite(PIN_CLOCK, 1);
 }
@@ -104,13 +120,5 @@ void shiftLatch(void){
 	ready = 1;
 }
 
-bool shiftIsReady(void){
-	return ready;
-}
-/*
-void shiftReset(void){
-	gpioWrite(PIN_RESET, 1)
 
-}
-*/
 
