@@ -331,17 +331,18 @@ void App_Run(void)
 			appState = APP_IDLE;
 		break;
 	case ACCESS_DENIED:
+		displayStr("out");
 		gpioWrite(PIN_LED_RED, LED_ACTIVE);
 		static tim_id_t AccessTimerDenied;
 		accessTimerStarted = true;
-			AccessTimerDenied = timerGetId();
-			timerStart(AccessTimerDenied, TIMER_MS2TICKS(5000), TIM_MODE_SINGLESHOT, &callbackAccessTimer);
-			while (accessTimerStarted)
-			{
-				timerUpdate();
-			}
-			gpioWrite(PIN_LED_RED, !LED_ACTIVE);
-			appState = APP_IDLE;
+		AccessTimerDenied = timerGetId();
+		timerStart(AccessTimerDenied, TIMER_MS2TICKS(5000), TIM_MODE_SINGLESHOT, &callbackAccessTimer);
+		while (accessTimerStarted)
+		{
+			timerUpdate();
+		}
+		gpioWrite(PIN_LED_RED, !LED_ACTIVE);
+		appState = APP_IDLE;
 		triesCounter = 0;
 		break;
 	}
@@ -368,6 +369,12 @@ char rotarySelectChar(char current, rotary_event_t event)
 void callbackToggleDisplayIdCursor(void){
 	displayCursorOn = !displayCursorOn;
 }
+
+void callbackAccessTimer(void){
+	accessTimerStarted = false;
+}
+
+
 
 void callbackAccessTimer(void){
 	accessTimerStarted = false;
