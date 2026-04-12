@@ -45,7 +45,7 @@ typedef struct {
 } credential_t;
 
 static const credential_t credentials[] = {
-    { "ABCD1234", "1234"  },
+    { "12345678", "12345" },
     { "USER0001", "pass1" },
     { "USER0002", "abc12" },
     { "ADMIN001", "9999"  },
@@ -104,6 +104,7 @@ void App_Run(void)
 		}
 		break;
 	case ENTER_ID:
+
 
 		static tim_id_t encoderTimer;
   		static bool timerStarted = false;
@@ -168,25 +169,24 @@ void App_Run(void)
 		}
 
 	////////////////// MOSTRAR EN DISPLAY EL ID QUE SE ESTA INGRESANDO
-		if(displayCursorOn){
-			id[index] = characterBeingChosen;
+		char displayBuffer[5] = {0};
+		
+		if(index >= 3){
+			for(int i = 0; i < 4; i++){
+		        displayBuffer[i] = id[index - 3 + i]; // muestro los ultimos 4 caracteres del ID
+		    }
+		    displayBuffer[4] = '\0';
+	
 		}
 		else{
-			id[index] = '\0';
+		    for(char i = 0; i < index; i++){
+		        displayBuffer[i] = id[i];    // confirmed chars left-aligned
+		    }
+		    displayBuffer[index] = id[index]; // cursor char — already set to characterBeingChosen or '\0'
 		}
 
-
-		if(index >= 4){
-			displayStr((id + index - 4)); // muestro los ultimos 4 caracteres del ID
-		}
-		else{
-			//mostrar en el display el ID que se esta ingresando
-			char displayBuffer[5] = "    ";
-			for(char i = 0; i < index; i++){
-				displayBuffer[4-index+i] = id[i];
-			}
-			displayStr(displayBuffer);
-		}
+		displayStr(displayBuffer);
+		displayChar(displayCursorOn? characterBeingChosen : '\0', index >= 4 ? 3 : index);
 		modeConfirmInput? displayLed(2) : displayLed(1);
 		break;
 	case VERIFY_ID:
@@ -210,6 +210,9 @@ void App_Run(void)
 			else{
 				appState = APP_IDLE;
 				triesCounter++;
+				for(int i = 0; i < MAX_ID_LENGTH + 1; i++){
+					id[i] = '\0';
+				}
 			}
 		}
 
@@ -278,26 +281,17 @@ void App_Run(void)
 		}
 
 	////////////////// MOSTRAR EN DISPLAY EL ID QUE SE ESTA INGRESANDO
-		if(displayCursorOn){
-			password[pwIndex] = pwCharacterBeingChosen;
+		for(int i = 0; i < 4; i++){
+			displayBuffer[i] = '\0'; // muestro asteriscos para el password
 		}
-		else{
-			password[pwIndex] = '\0';
+		
+		for(int i = 0; i < ((pwIndex >= 3) ? 3 : pwIndex) ; i++){
+			displayBuffer[i] = '-'; // muestro los ultimos 4 caracteres del password
 		}
+	
 
-
-		if(pwIndex >= 4){
-			displayStr((password + pwIndex - 4)); // muestro los ultimos 4 caracteres del ID
-		}
-		else{
-			//mostrar en el display el ID que se esta ingresando
-			char displayBuffer[5] = "    ";
-			for(char i = 0; i < pwIndex; i++){
-				displayBuffer[4-pwIndex+i] = '-'; // por seguridad no muestro el password, muestro un guion en su lugar
-			}
-			displayStr(displayBuffer);
-			displayChar(password[pwIndex], pwIndex >4 ? 3 : pwIndex);
-		}
+		displayStr(displayBuffer);
+		displayChar(displayCursorOn? pwCharacterBeingChosen : '\0', pwIndex >= 4 ? 3 : pwIndex);
 		pwModeConfirmInput? displayLed(2) : displayLed(1);
 
 		break;
@@ -308,7 +302,6 @@ void App_Run(void)
 		}
 		else{
 			bool idMatch = false;
-			// En VERIFY_PASSWORD, usar solo ese índice
 			if(strcmp(password, credentials[matchedUserIndex].password) == 0){
 				idMatch = true;
 			}
@@ -376,3 +369,5 @@ void callbackToggleDisplayIdCursor(void){
 void callbackAccessTimer(void){
 	accessTimerStarted = false;
 }
+
+
