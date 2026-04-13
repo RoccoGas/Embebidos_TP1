@@ -37,6 +37,18 @@ static bool displayCursorOn = false;
 
 bool volatile accessTimerStarted = false;
 
+static tim_id_t timeoutTimerId;
+static tim_id_t encoderTimer;
+static tim_id_t pwEncoderTimer;
+
+
+
+static volatile int triesCounter = 0;
+
+static volatile bool timerStarted = false;
+static volatile bool pwTimerStarted = false;
+
+
 typedef struct {
     const char id[9];
     const char password[6];
@@ -45,7 +57,7 @@ typedef struct {
 static const credential_t credentials[] = {
     { "12345678", "12345" },
     { "USER0001", "pass1" },
-    { "45176601", "abc12" },
+    { "45176601", "4567" },
     { "ADMIN001", "9999"  },
 };
 
@@ -54,7 +66,7 @@ static const credential_t credentials[] = {
 char rotarySelectChar(char current, rotary_event_t event);
 void callbackToggleDisplayIdCursor(void);
 void callbackAccessTimer(void);
-
+void callbackTimeout(void);
 
 
 void App_Init(void)
@@ -71,20 +83,30 @@ void App_Init(void)
 
 	gpioMode(PIN_LED_BLUE, OUTPUT);
 	gpioWrite(PIN_LED_BLUE, !LED_ACTIVE);
+
+	timeoutTimerId = timerGetId();
+	timerStart(timeoutTimerId, TIMER_MS2TICKS(20000), TIM_MODE_PERIODIC, &callbackTimeout);
+
+	encoderTimer = timerGetId();
+	pwEncoderTimer = timerGetId();
+
 }
 void App_Run(void)
 {
-	static int triesCounter = 0;
 	timerUpdate();
 	rotaryEvent = encoderGetState();
 
-
+	if(rotaryEvent != IDLE){
+		timerStart(timeoutTimerId, TIMER_MS2TICKS(20000), TIM_MODE_PERIODIC, &callbackTimeout);
+	}
 	
 	switch(appState){
 	case APP_IDLE:
+{
 		gpioWrite(PIN_LED_BLUE, LED_ACTIVE);
-		bool cardDataReady = magtekDataReady();
+		volatile bool cardDataReady = magtekDataReady();
 		if(cardDataReady){
+			
 			char auxBuffer[MAGTEK_MAX_CHARS+1];
 			uint8_t lengthOfData;
 			magtek_result_t magtekResult = magtekGetData(auxBuffer, &lengthOfData);
@@ -99,26 +121,27 @@ void App_Run(void)
 				id[MAX_ID_LENGTH] = '\0';
 				appState = VERIFY_ID;
 
-	
+				timerStart(timeoutTimerId, TIMER_MS2TICKS(20000), TIM_MODE_PERIODIC, &callbackTimeout);
+
 			}
+
 		}
 
 		if(rotaryEvent == BUTTON_PRESS || rotaryEvent == LONG_BUTTON_PRESS ){
 			appState = ENTER_ID;
 		}
 		break;
+}
 	case ENTER_ID:
+{
 		gpioWrite(PIN_LED_BLUE, !LED_ACTIVE);
 	
-		static tim_id_t encoderTimer;
-  		static bool timerStarted = false;
     	static char index = 0;
     	static char characterBeingChosen = '0';
     	static bool modeConfirmInput = false;
 
 
 		if(!timerStarted){
-			encoderTimer = timerGetId();
 			timerStart(encoderTimer, TIMER_MS2TICKS(500), TIM_MODE_PERIODIC, &callbackToggleDisplayIdCursor);
 			index = 0;
 			characterBeingChosen = '0';
@@ -163,7 +186,6 @@ void App_Run(void)
 				appState = VERIFY_ID;
 
 				timerStop(encoderTimer);
-				timerDestroy(encoderTimer);
 				timerStarted = false;
 
 			}
@@ -202,8 +224,9 @@ void App_Run(void)
 		displayChar(displayCursorOn? characterBeingChosen : '\0', index >= 4 ? 3 : index);
 		modeConfirmInput? displayLed(2) : displayLed(1);
 		break;
-
+}
 	case VERIFY_ID:
+{
 		gpioWrite(PIN_LED_BLUE, !LED_ACTIVE);
 
 
@@ -229,21 +252,31 @@ void App_Run(void)
 				appState = APP_IDLE;
 				triesCounter++;
 				displayStr("noID");
-				magtekInit();
+				appState = APP_IDLE;
+
+			for(int i = 0; i < MAX_ID_LENGTH + 1; i++){
+				id[i] = 0;
+			}
+			for(int i = 0; i < MAX_PASSWORD_LENGTH + 1; i++){
+				password[i] = 0;
+			}
+			pwTimerStarted = false;
+			timerStarted = false;
+			timerStop(encoderTimer);
+			timerStop(pwEncoderTimer);
 			}
 		}
 
 		break;
+}
 	case ENTER_PASSWORD:
-		static tim_id_t pwEncoderTimer;
-  		static bool pwTimerStarted = false;
+{
     	static char pwIndex = 0;
     	static char pwCharacterBeingChosen = '0';
     	static bool pwModeConfirmInput = false;
 
 
 		if(!pwTimerStarted){
-			pwEncoderTimer = timerGetId();
 			timerStart(pwEncoderTimer, TIMER_MS2TICKS(500), TIM_MODE_PERIODIC, &callbackToggleDisplayIdCursor);
 			pwIndex = 0;
 			pwCharacterBeingChosen = '0';
@@ -273,8 +306,10 @@ void App_Run(void)
 						pwIndex--;
 					}
 				}
-				else if(rotaryEvent == RIGHT_TURN){
-					pwModeConfirmInput = false;
+				else if(rotaryEvent == RIGHT_TURN){		
+					bright %= 16;
+					bright += 4;
+					displayBrightness(bright);
 				}
 
 			}
@@ -284,7 +319,6 @@ void App_Run(void)
 				appState = VERIFY_PASSWORD;
 
 				timerStop(pwEncoderTimer);
-				timerDestroy(pwEncoderTimer);
 				pwTimerStarted = false;
 
 			}
@@ -303,6 +337,7 @@ void App_Run(void)
 		}
 
 	////////////////// MOSTRAR EN DISPLAY EL ID QUE SE ESTA INGRESANDO
+		char displayBuffer[5] = {0};
 		for(int i = 0; i < 4; i++){
 			displayBuffer[i] = '\0'; // muestro asteriscos para el password
 		}
@@ -317,7 +352,9 @@ void App_Run(void)
 		pwModeConfirmInput? displayLed(2) : displayLed(1);
 
 		break;
+}
 	case VERIFY_PASSWORD:
+{
 	displayLed(0);
 	if(triesCounter >= 3){
 			appState = ACCESS_DENIED;
@@ -336,34 +373,47 @@ void App_Run(void)
 			}
 		}
 		break;
+}
 	case ACCESS_GRANTED:
-		gpioWrite(PIN_LED_GREEN, LED_ACTIVE);
-		static tim_id_t AccessTimerGranted;
-		accessTimerStarted = true;
-			AccessTimerGranted = timerGetId();
-			timerStart(AccessTimerGranted, TIMER_MS2TICKS(5000), TIM_MODE_SINGLESHOT, &callbackAccessTimer);
-			while (accessTimerStarted)
-			{
-				timerUpdate();
-			}
-			gpioWrite(PIN_LED_GREEN, !LED_ACTIVE);
-			appState = APP_IDLE;
-		break;
-	case ACCESS_DENIED:
-		displayStr("out");
-		gpioWrite(PIN_LED_RED, LED_ACTIVE);
-		static tim_id_t AccessTimerDenied;
-		accessTimerStarted = true;
-		AccessTimerDenied = timerGetId();
-		timerStart(AccessTimerDenied, TIMER_MS2TICKS(5000), TIM_MODE_SINGLESHOT, &callbackAccessTimer);
-		while (accessTimerStarted)
-		{
-			timerUpdate();
-		}
-		gpioWrite(PIN_LED_RED, !LED_ACTIVE);
-		appState = APP_IDLE;
-		triesCounter = 0;
-		break;
+{
+    static bool entered = false;
+    if (!entered) {
+        entered = true;
+        displayStr("OPEN");
+        gpioWrite(PIN_LED_GREEN, LED_ACTIVE);
+
+        tim_tick_t start = timerGetGlobalTicks();
+        while ((timerGetGlobalTicks() - start) < TIMER_MS2TICKS(5000));
+
+        gpioWrite(PIN_LED_GREEN, !LED_ACTIVE);
+        triesCounter = 0;
+        matchedUserIndex = -1;
+        entered = false;
+        appState = APP_IDLE;
+		callbackTimeout();
+    }
+    break;
+}
+case ACCESS_DENIED:
+{
+    static bool entered = false;
+    if (!entered) {
+        entered = true;
+        displayStr("----");
+        gpioWrite(PIN_LED_RED, LED_ACTIVE);
+
+        tim_tick_t start = timerGetGlobalTicks();
+        while ((timerGetGlobalTicks() - start) < TIMER_MS2TICKS(3000));
+
+        gpioWrite(PIN_LED_RED, !LED_ACTIVE);
+        triesCounter = 0;
+        matchedUserIndex = -1;
+        entered = false;
+        appState = APP_IDLE;
+		callbackTimeout();
+    }
+    break;
+}
 	}
 
 }
@@ -394,3 +444,22 @@ void callbackAccessTimer(void){
 }
 
 
+void callbackTimeout(void){
+	appState = APP_IDLE;
+
+	for(int i = 0; i < MAX_ID_LENGTH + 1; i++){
+		id[i] = 0;
+	}
+	for(int i = 0; i < MAX_PASSWORD_LENGTH + 1; i++){
+		password[i] = 0;
+	}
+	triesCounter = 0;
+	pwTimerStarted = false;
+	timerStarted = false;
+	displayStr("    ");
+
+	timerStop(encoderTimer);
+
+	timerStop(pwEncoderTimer);
+
+}

@@ -161,6 +161,7 @@ static magtek_result_t decode(uint8_t *buf, uint8_t *len)
     return MAGTEK_OK;
 }
 
+
 /*******************************************************************************
  * API PÚBLICA
  ******************************************************************************/
@@ -183,9 +184,9 @@ void magtekInit(void)
     active  = false;
     ready   = false;
 
-    gpioMode(MAGTEK_PIN_DATA,   INPUT);
-    gpioMode(MAGTEK_PIN_CLOCK,  INPUT);
-    gpioMode(MAGTEK_PIN_ENABLE, INPUT);
+    gpioMode(MAGTEK_PIN_DATA,   INPUT_PULLUP);
+    gpioMode(MAGTEK_PIN_CLOCK,  INPUT_PULLUP);
+    gpioMode(MAGTEK_PIN_ENABLE, INPUT_PULLUP);
 
     magtekEnableIRQ();
 }
